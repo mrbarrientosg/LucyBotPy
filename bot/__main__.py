@@ -15,8 +15,10 @@ async def ping(ctx, name, category_name=None):
         category = discord.utils.get(ctx.guild.categories, id=ctx.channel.category_id)
     else:
         category = discord.utils.get(ctx.guild.categories, name=category_name)
-
-
+        
+    # Setting `Watching ` status
+    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="a tu vieja"))
+    
     guild = ctx.message.guild
     await guild.create_voice_channel(name, category=category)
 """
