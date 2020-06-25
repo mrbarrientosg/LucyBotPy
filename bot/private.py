@@ -72,16 +72,22 @@ class Private(commands.Cog):
             return await ctx.send('{}, amiga me dio un lag mental, no puedo ayudarte!! ❤️'.format(ctx.author.mention))
 
         exception = False
-
+        count = 0
         for user in members_private:
             try:
                 await user.add_roles(role)
                 await user.move_to(voice_channel)
             except discord.HTTPException:
+                count += 1
                 if not exception:
                     await ctx.send(
-                        '{}, tu(s) amiga se quedo dormida, asi que no la puedo mover ❤️'.format(ctx.author.mention))
+                        '{}, tu(s) amiga(s) se quedo dormida, asi que no la puedo mover ❤️'.format(ctx.author.mention))
                     exception = True
+
+        if len(members_private) == count:
+            await voice_channel.delete()
+            await role.delete()
+            return
 
         try:
             await ctx.author.add_roles(role)
