@@ -2,6 +2,7 @@ import discord
 import uuid
 import asyncio
 import typing
+import numpy as np
 from discord.ext import commands
 
 
@@ -11,30 +12,45 @@ class Private(commands.Cog):
         self.bg_task = None
         self.channels = list()
 
-    @commands.command()
-    async def private(self, ctx, *args: typing.Union[discord.Member, discord.User]):
-        is_bot = filter(lambda user: user.bot, args)
+    @commands.group()
+    async def private(self, ctx):
+        if ctx.invoked_subcommand is None:
+            await ctx.send('Invalid sub command passed...')
 
-        if list(is_bot):
-            return await ctx.send('{}, amiga los bots no son personas, saludos 😘 ❤️'.format(ctx.author.mention))
+    @private.command()
+    async def create(self, ctx, *args: typing.Union[discord.Member, discord.User]):
+        # Mantengo todos los miembros en un arreglo
+        all_members = np.array(args)
+        all_members = np.append(all_members, ctx.author)  # se agrega el mismo autor del mensaje
 
-        if not args or ctx.author.id == args[0].id:
+        # Elimino todos los bot de los miembros que pasan por argumento
+        all_members = np.array([member for member in all_members if not member.bot])
+
+        # Obtengo los miembres que ya esta en un privado y hago un join con los actuales
+        private_members = [member for member in all_members if any('private' in role.name for role in member.roles)]
+        all_members = np.array([member for member in all_members if not member in private_members])
+
+        # Valido las condiciones
+        if all_members.size == 0:
+            return await ctx.send('{}, amorosa ya estas en un canal privado, besos!! ❤️'.format(ctx.author.mention))
+        elif private_members:
+            return await ctx.send('{}, amorosa hay amigos que ya estan en un privado 1313 ❤️'.format(ctx.author.mention))
+
+        # Hay que verficar que esten todos conectados
+        not_connected_members = [member for member in all_members if
+                                 member.voice is None or member.voice.afk or member.voice.channel is None]
+
+        all_members = np.array([member for member in all_members if not member in not_connected_members])
+
+        if all_members.size == 1:
+            return await ctx.send(
+                '{}, amorosa no hay nadie conectado para hacer un privado ❤️'.format(ctx.author.mention))
+        elif self._check_empty_members(all_members, ctx.author):
             return await ctx.send(
                 '{}, amiga aqui aceptamos solo socialismo nada de soledad ❤️'.format(ctx.author.mention))
-
-        has_private = filter(lambda role: role.name.startswith('private-'), ctx.author.roles)
-
-        if list(has_private):
-            return await ctx.send('{}, amorosa ya estas en un canal privado, besos!! ❤️'.format(ctx.author.mention))
-
-        members_private = list()
-
-        for member in args:
-            if not any('private' in role.name for role in member.roles):
-                members_private.append(member)
-
-        if not members_private:
-            return await ctx.send('{}, amorosa hay amigos que ya estan en un privado 1313 ❤️'.format(ctx.author.mention))
+        elif ctx.author.voice is None:
+            return await ctx.send(
+                '{}, amiga tienes que estar conectada, no puedes dejar a tu(s) amiga(s) sola(s) ❤️'.format(ctx.author.mention))
 
         guild = ctx.guild
         id = uuid.uuid1().node
@@ -59,12 +75,12 @@ class Private(commands.Cog):
 
         try:
             permission = discord.PermissionOverwrite()
-            permission.connect = True
-            permission.speak = True
-            permission.move_members = False
-            permission.manage_roles = False
-            permission.manage_permissions = False
-            permission.view_channel = True
+            permission.update(connect=True,
+                              speak=True,
+                              move_members=False,
+                              manage_roles=False,
+                              manage_permissions=False,
+                              view_channel=True)
             await voice_channel.set_permissions(target=role, overwrite=permission)
         except discord.HTTPException:
             await voice_channel.delete()
@@ -73,7 +89,7 @@ class Private(commands.Cog):
 
         exception = False
         count = 0
-        for user in members_private:
+        for user in all_members:
             try:
                 await user.add_roles(role)
                 await user.move_to(voice_channel)
@@ -84,21 +100,33 @@ class Private(commands.Cog):
                         '{}, tu(s) amiga(s) se quedo dormida, asi que no la puedo mover ❤️'.format(ctx.author.mention))
                     exception = True
 
-        if len(members_private) == count:
+        for member in not_connected_members:
+            try:
+                await member.add_roles(role)
+            except discord.HTTPException:
+                return await ctx.send('{}, amiga me dio un lag mental, no puedo ayudarte!! ❤️'.format(ctx.author.mention))
+
+        if len(all_members) == count:
             await voice_channel.delete()
             await role.delete()
             return
-
-        try:
-            await ctx.author.add_roles(role)
-            await ctx.author.move_to(voice_channel)
-        except discord.HTTPException:
-            await ctx.send('{}, amiga no te veo conectado para moverte ❤️'.format(ctx.author.mention))
 
         if not self.channels:
             self.bg_task = self.bot.loop.create_task(self._check_channels())
 
         self.channels.append((voice_channel, role))
+
+    def _check_empty_members(self, members, author):
+        if members.size == 0:
+            return True
+
+        users = [member for member in members if member.id == author.id]
+        members = [member for member in members if not member in users]
+
+        if users and not members:
+            return True
+        else:
+            return False
 
     async def _check_channels(self):
         await self.bot.wait_until_ready()
