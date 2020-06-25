@@ -15,7 +15,44 @@ class Private(commands.Cog):
     @commands.group()
     async def private(self, ctx):
         if ctx.invoked_subcommand is None:
-            await ctx.send('Invalid sub command passed...')
+            await ctx.send('{}, amorosa no sabes ocupar el private, ve mi flor de ayuda!! ❤️'.format(ctx.author.mention))
+
+    @private.command()
+    async def remove(self, ctx):
+        if not any('private' in role.name for role in ctx.author.roles):
+            return await ctx.send(
+                '{}, amiga no estas en un privado ❤️'.format(ctx.author.mention))
+
+        role = [role for role in ctx.author.roles if role.name.startswith('private-')][0]
+
+        if ctx.author.voice is not None and ctx.author.voice.channel is not None:
+            if ctx.author.voice.channel.name == role.name:
+                await ctx.author.move_to(None)
+
+        return await ctx.author.remove_roles(role)
+
+    @private.command()
+    async def invite(self, ctx, *args: typing.Union[discord.Member, discord.User]):
+        if not any('private' in role.name for role in ctx.author.roles):
+            return await ctx.send(
+                '{}, amiga tienes que estar en un privado para invitar ❤️'.format(ctx.author.mention))
+
+        all_members = np.array([member for member in args if not member.bot])
+        all_members = np.array([member for member in all_members if member.id != ctx.author.id])
+
+        private_members = [member for member in all_members if any('private' in role.name for role in member.roles)]
+        all_members = np.array([member for member in all_members if not member in private_members])
+
+        role = [role for role in ctx.author.roles if role.name.startswith('private-')][0]
+
+        for member in all_members:
+            try:
+                await member.add_roles(role)
+            except discord.HTTPException:
+                return await ctx.send(
+                    '{}, amiga me dio un lag mental, no puedo ayudarte!! ❤️'.format(ctx.author.mention))
+
+        return await ctx.send('amiga {}, {} te ha invitado a un privado ❤️'.format(' '.join(member.mention for member in all_members), ctx.author.mention))
 
     @private.command()
     async def create(self, ctx, *args: typing.Union[discord.Member, discord.User]):
@@ -53,7 +90,7 @@ class Private(commands.Cog):
                 '{}, amiga tienes que estar conectada, no puedes dejar a tu(s) amiga(s) sola(s) ❤️'.format(ctx.author.mention))
 
         guild = ctx.guild
-        id = uuid.uuid1().node
+        id = uuid.uuid4().node
         name = 'private-{}'.format(id)
 
         role = None
