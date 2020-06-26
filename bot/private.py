@@ -39,7 +39,7 @@ class Private(commands.Cog):
             return await ctx.send(
                 '{}, amiga no estas en un privado ❤️'.format(ctx.author.mention))
 
-        role = [role for role in ctx.author.roles if role.name.startswith('private-')][0]
+        role = [role for role in ctx.author.roles if role.name.startswith('lprivate-')][0]
 
         if ctx.author.voice is not None and ctx.author.voice.channel is not None:
             if ctx.author.voice.channel.name == role.name:
@@ -49,17 +49,17 @@ class Private(commands.Cog):
 
     @private.command()
     async def invite(self, ctx, *args: typing.Union[discord.Member, discord.User]):
-        if not any('private' in role.name for role in ctx.author.roles):
+        if not any('lprivate' in role.name for role in ctx.author.roles):
             return await ctx.send(
                 '{}, amiga tienes que estar en un privado para invitar ❤️'.format(ctx.author.mention))
 
         all_members = np.array([member for member in args if not member.bot])
         all_members = np.array([member for member in all_members if member.id != ctx.author.id])
 
-        private_members = [member for member in all_members if any('private' in role.name for role in member.roles)]
+        private_members = [member for member in all_members if any('lprivate' in role.name for role in member.roles)]
         all_members = np.array([member for member in all_members if not member in private_members])
 
-        role = [role for role in ctx.author.roles if role.name.startswith('private-')][0]
+        role = [role for role in ctx.author.roles if role.name.startswith('lprivate-')][0]
 
         for member in all_members:
             try:
@@ -68,9 +68,13 @@ class Private(commands.Cog):
                 return await ctx.send(
                     '{}, amiga me dio un lag mental, no puedo ayudarte!! ❤️'.format(ctx.author.mention))
 
-        return await ctx.send(
-            'amiga {}, {} te ha invitado a un privado ❤️'.format(' '.join(member.mention for member in all_members),
-                                                                 ctx.author.mention))
+        if all_members:
+            await ctx.send(
+                'amiga {}, {} te ha invitado a un privado ❤️'.format(' '.join(member.mention for member in all_members),
+                                                                     ctx.author.mention))
+        else:
+            return await ctx.send(
+                '{}, amiga ya invitaste a tus amigos, invita a otros no seas ingrata!! ❤️'.format(ctx.author.mention))
 
     @private.command()
     async def create(self, ctx, type: ChannelTypeConverter, *args: typing.Union[discord.Member, discord.User]):
@@ -85,7 +89,7 @@ class Private(commands.Cog):
         all_members = np.array([member for member in all_members if not member.bot])
 
         # Obtengo los miembres que ya esta en un privado y hago un join con los actuales
-        private_members = [member for member in all_members if any('private' in role.name for role in member.roles)]
+        private_members = [member for member in all_members if any('lprivate' in role.name for role in member.roles)]
         all_members = np.array([member for member in all_members if not member in private_members])
 
         # Valido las condiciones
@@ -114,7 +118,7 @@ class Private(commands.Cog):
 
         guild = ctx.guild
         id = uuid.uuid4().node
-        name = 'private-{}'.format(id)
+        name = 'lprivate-{}'.format(id)
 
         role = None
 
