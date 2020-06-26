@@ -8,7 +8,6 @@ from enum import Enum
 
 
 class ChannelTypePrivate(Enum):
-    text = 0
     voice = 1
     both = 2
     none = 3
@@ -26,7 +25,6 @@ class Private(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.voice_task = None
-        self.text_task = None
         self.channels = list()
 
     @commands.group()
@@ -132,8 +130,6 @@ class Private(commands.Cog):
         try:
             if type == ChannelTypePrivate.voice:
                 channel = await guild.create_voice_channel(name=name, category=category)
-            elif type == ChannelTypePrivate.text:
-                channel = await guild.create_text_channel(name=name, category=category)
             else:
                 channel = (await guild.create_text_channel(name=name, category=category), await guild.create_voice_channel(name=name, category=category))
         except discord.HTTPException:
@@ -189,10 +185,8 @@ class Private(commands.Cog):
             await role.delete()
             return
 
-        if not self.channels and (type == ChannelTypePrivate.voice or type == ChannelTypePrivate.both):
+        if not self.channels:
             self.voice_task = self.bot.loop.create_task(self._check_voice_channels())
-        elif not self.channels and type == ChannelTypePrivate.text:
-            self.text_task = self.bot.loop.create_task(self._check_text_channels())
 
         self.channels.append((channel, type, role))
 
@@ -212,6 +206,7 @@ class Private(commands.Cog):
         await self.bot.wait_until_ready()
 
         while True:
+            await asyncio.sleep(10)  # 1800
             print(len(self.channels))
             if not self.channels:
                 self.voice_task.cancel()
@@ -223,24 +218,6 @@ class Private(commands.Cog):
                     await role.delete()
                     self.channels.remove((channel, type, role))
                 elif type == ChannelTypePrivate.both and not channel[1].members:
-                    await self._remove_channels(channel)
-                    await role.delete()
-                    self.channels.remove((channel, type, role))
-
-            await asyncio.sleep(10)  # 1800
-
-    async def _check_text_channels(self):
-        await self.bot.wait_until_ready()
-
-        while True:
-            await asyncio.sleep(30)# 1800
-
-            if not self.channels:
-                self.text_task.cancel()
-                self.text_task = None
-
-            for channel, type, role in self.channels:
-                if type == ChannelTypePrivate.text:
                     await self._remove_channels(channel)
                     await role.delete()
                     self.channels.remove((channel, type, role))
