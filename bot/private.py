@@ -4,18 +4,36 @@ import asyncio
 import typing
 import numpy as np
 from discord.ext import commands
+from enum import Enum
+
+
+class ChannelTypePrivate(Enum):
+    text = 0
+    voice = 1
+    both = 2
+    none = 3
+
+
+class ChannelTypeConverter(commands.Converter):
+    async def convert(self, ctx, argument: str):
+        try:
+            return ChannelTypePrivate[argument]
+        except:
+            return ChannelTypePrivate.none
 
 
 class Private(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.bg_task = None
+        self.voice_task = None
+        self.text_task = None
         self.channels = list()
 
     @commands.group()
     async def private(self, ctx):
         if ctx.invoked_subcommand is None:
-            await ctx.send('{}, amorosa no sabes ocupar el private, ve mi flor de ayuda!! ❤️'.format(ctx.author.mention))
+            await ctx.send(
+                '{}, amorosa no sabes ocupar el private, ve mi flor de ayuda!! ❤️'.format(ctx.author.mention))
 
     @private.command()
     async def remove(self, ctx):
@@ -52,10 +70,15 @@ class Private(commands.Cog):
                 return await ctx.send(
                     '{}, amiga me dio un lag mental, no puedo ayudarte!! ❤️'.format(ctx.author.mention))
 
-        return await ctx.send('amiga {}, {} te ha invitado a un privado ❤️'.format(' '.join(member.mention for member in all_members), ctx.author.mention))
+        return await ctx.send(
+            'amiga {}, {} te ha invitado a un privado ❤️'.format(' '.join(member.mention for member in all_members),
+                                                                 ctx.author.mention))
 
     @private.command()
-    async def create(self, ctx, *args: typing.Union[discord.Member, discord.User]):
+    async def create(self, ctx, type: ChannelTypeConverter, *args: typing.Union[discord.Member, discord.User]):
+        if type == ChannelTypePrivate.none:
+            return await ctx.send('{}, amorosa te falta el tipo del canal!! ❤️'.format(ctx.author.mention))
+
         # Mantengo todos los miembros en un arreglo
         all_members = np.array(args)
         all_members = np.append(all_members, ctx.author)  # se agrega el mismo autor del mensaje
@@ -71,7 +94,8 @@ class Private(commands.Cog):
         if all_members.size == 0:
             return await ctx.send('{}, amorosa ya estas en un canal privado, besos!! ❤️'.format(ctx.author.mention))
         elif private_members:
-            return await ctx.send('{}, amorosa hay amigos que ya estan en un privado 1313 ❤️'.format(ctx.author.mention))
+            return await ctx.send(
+                '{}, amorosa hay amigos que ya estan en un privado 1313 ❤️'.format(ctx.author.mention))
 
         # Hay que verficar que esten todos conectados
         not_connected_members = [member for member in all_members if
@@ -87,7 +111,8 @@ class Private(commands.Cog):
                 '{}, amiga aqui aceptamos solo socialismo nada de soledad ❤️'.format(ctx.author.mention))
         elif ctx.author.voice is None:
             return await ctx.send(
-                '{}, amiga tienes que estar conectada, no puedes dejar a tu(s) amiga(s) sola(s) ❤️'.format(ctx.author.mention))
+                '{}, amiga tienes que estar conectada, no puedes dejar a tu(s) amiga(s) sola(s) ❤️'.format(
+                    ctx.author.mention))
 
         guild = ctx.guild
         id = uuid.uuid4().node
@@ -102,10 +127,15 @@ class Private(commands.Cog):
 
         category = discord.utils.get(guild.categories, name='privado')
 
-        voice_channel = None
+        channel = None
 
         try:
-            voice_channel = await guild.create_voice_channel(name=name, category=category)
+            if type == ChannelTypePrivate.voice:
+                channel = await guild.create_voice_channel(name=name, category=category)
+            elif type == ChannelTypePrivate.text:
+                channel = await guild.create_text_channel(name=name, category=category)
+            else:
+                channel = (await guild.create_text_channel(name=name, category=category), await guild.create_voice_channel(name=name, category=category))
         except discord.HTTPException:
             await role.delete()
             return await ctx.send('{}, amiga me dio un lag mental, no puedo ayudarte!! ❤️'.format(ctx.author.mention))
@@ -118,9 +148,14 @@ class Private(commands.Cog):
                               manage_roles=False,
                               manage_permissions=False,
                               view_channel=True)
-            await voice_channel.set_permissions(target=role, overwrite=permission)
+            if isinstance(channel, tuple):
+                await channel[0].set_permissions(target=role, overwrite=permission)
+                await channel[1].set_permissions(target=role, overwrite=permission)
+            else:
+                await channel.set_permissions(target=role, overwrite=permission)
+
         except discord.HTTPException:
-            await voice_channel.delete()
+            await self._remove_channels(channel)
             await role.delete()
             return await ctx.send('{}, amiga me dio un lag mental, no puedo ayudarte!! ❤️'.format(ctx.author.mention))
 
@@ -129,7 +164,12 @@ class Private(commands.Cog):
         for user in all_members:
             try:
                 await user.add_roles(role)
-                await user.move_to(voice_channel)
+
+                if type == ChannelTypePrivate.voice:
+                    await user.move_to(channel)
+                elif type == ChannelTypePrivate.both:
+                    await user.move_to(channel[1])
+
             except discord.HTTPException:
                 count += 1
                 if not exception:
@@ -141,17 +181,20 @@ class Private(commands.Cog):
             try:
                 await member.add_roles(role)
             except discord.HTTPException:
-                return await ctx.send('{}, amiga me dio un lag mental, no puedo ayudarte!! ❤️'.format(ctx.author.mention))
+                return await ctx.send(
+                    '{}, amiga me dio un lag mental, no puedo ayudarte!! ❤️'.format(ctx.author.mention))
 
         if len(all_members) == count:
-            await voice_channel.delete()
+            await self._remove_channels(channel)
             await role.delete()
             return
 
-        if not self.channels:
-            self.bg_task = self.bot.loop.create_task(self._check_channels())
+        if not self.channels and (type == ChannelTypePrivate.voice or type == ChannelTypePrivate.both):
+            self.voice_task = self.bot.loop.create_task(self._check_voice_channels())
+        elif not self.channels and type == ChannelTypePrivate.text:
+            self.text_task = self.bot.loop.create_task(self._check_text_channels())
 
-        self.channels.append((voice_channel, role))
+        self.channels.append((channel, type, role))
 
     def _check_empty_members(self, members, author):
         if members.size == 0:
@@ -165,19 +208,47 @@ class Private(commands.Cog):
         else:
             return False
 
-    async def _check_channels(self):
+    async def _check_voice_channels(self):
         await self.bot.wait_until_ready()
 
         while True:
             print(len(self.channels))
             if not self.channels:
-                self.bg_task.cancel()
-                self.bg_task = None
+                self.voice_task.cancel()
+                self.voice_task = None
 
-            for channel, role in self.channels:
-                if not channel.members:
-                    await channel.delete()
+            for channel, type, role in self.channels:
+                if type == ChannelTypePrivate.voice and not channel.members:
+                    await self._remove_channels(channel)
                     await role.delete()
-                    self.channels.remove((channel, role))
+                    self.channels.remove((channel, type, role))
+                elif type == ChannelTypePrivate.both and not channel[1].members:
+                    await self._remove_channels(channel)
+                    await role.delete()
+                    self.channels.remove((channel, type, role))
 
             await asyncio.sleep(10)  # 1800
+
+    async def _check_text_channels(self):
+        await self.bot.wait_until_ready()
+
+        while True:
+            await asyncio.sleep(30)# 1800
+
+            if not self.channels:
+                self.text_task.cancel()
+                self.text_task = None
+
+            for channel, type, role in self.channels:
+                if type == ChannelTypePrivate.text:
+                    await self._remove_channels(channel)
+                    await role.delete()
+                    self.channels.remove((channel, type, role))
+
+
+    async def _remove_channels(self, channel):
+        if isinstance(channel, tuple):
+            await channel[0].delete()
+            await channel[1].delete()
+        else:
+            await channel.delete()
