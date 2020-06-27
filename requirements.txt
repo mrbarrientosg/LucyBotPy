@@ -1,9 +1,8 @@
-git+https://github.com/Rapptz/discord.py@master
-dnspython==1.16.0
-PyNaCl==1.4.0
-async-timeout==3.0.1
+discord.py[voice]
+dnspython
+PyNaCl
+async-timeout
 numpy
 wolframalpha
 youtube_dl
-pynacl
-ffmpeg
+opuslib
