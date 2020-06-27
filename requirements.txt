@@ -5,5 +5,3 @@ async-timeout==3.0.1
 numpy
 wolframalpha
 youtube_dl
-pynacl
-ffmpeg
