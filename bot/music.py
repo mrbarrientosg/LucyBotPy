@@ -24,72 +24,30 @@ class YTDLError(Exception):
     pass
 
 
-class YTDLSource(discord.PCMVolumeTransformer):
+class Song(discord.PCMVolumeTransformer):
 
-    def __init__(self, ctx: commands.Context, source: discord.FFmpegPCMAudio, *, data: dict, volume: float = 0.5):
-        super().__init__(source, volume)
-
+    def __init__(self, source: discord.AudioSource, ctx: commands.Context, volume: float = 0.5, *, data: dict):
+        super().__init__(source)
         self.ctx = ctx
-        self.requester = ctx.author
-        self.channel = ctx.channel
         self.data = data
-
-        self.uploader = data.get('uploader')
-        self.uploader_url = data.get('uploader_url')
-        date = data.get('upload_date')
-        self.upload_date = date[6:8] + '.' + date[4:6] + '.' + date[0:4]
-        self.title = data.get('title')
-        self.thumbnail = data.get('thumbnail')
-        self.description = data.get('description')
-        self.duration = self.parse_duration(int(data.get('duration')))
-        self.tags = data.get('tags')
-        self.url = data.get('webpage_url')
-        self.views = data.get('view_count')
-        self.likes = data.get('like_count')
-        self.dislikes = data.get('dislike_count')
-        self.stream_url = data.get('url')
-
-    def __str__(self):
-        return '**{0.title}** by **{0.uploader}**'.format(self)
-
-    @staticmethod
-    def parse_duration(duration: int):
-        minutes, seconds = divmod(duration, 60)
-        hours, minutes = divmod(minutes, 60)
-        days, hours = divmod(hours, 24)
-
-        duration = []
-        if days > 0:
-            duration.append('{} days'.format(days))
-        if hours > 0:
-            duration.append('{} hours'.format(hours))
-        if minutes > 0:
-            duration.append('{} minutes'.format(minutes))
-        if seconds > 0:
-            duration.append('{} seconds'.format(seconds))
-
-        return ', '.join(duration)
-
-
-class Song:
-    __slots__ = ('source', 'requester')
-
-    def __init__(self, source: YTDLSource):
-        self.source = source
-        self.requester = source.requester
+        self.requester = ctx.author
 
     def create_embed(self):
-        embed = (discord.Embed(title='Now playing',
-                               description='```css\n{0.source.title}\n```'.format(self),
-                               color=discord.Color.blurple())
-                 .add_field(name='Duration', value=self.source.duration)
-                 .add_field(name='Requested by', value=self.requester.mention)
-                 .add_field(name='Uploader', value='[{0.source.uploader}]({0.source.uploader_url})'.format(self))
-                 .add_field(name='URL', value='[Click]({0.source.url})'.format(self))
-                 .set_thumbnail(url=self.source.thumbnail))
+        embed = discord.Embed()
+        m, s = divmod(int(self.data.get('duration')), 60)
+        embed.title = "Music"
+        embed.description = '```css\n{}\n```'.format(self.data.get('title'))
+        embed.set_image(url=self.data.get('thumbnail'))
+        # embed.add_field(name="Song name", value=self.data.get('title'), inline=True)
+        embed.add_field(name="Duration", value=str("{}:{}".format(m, s)), inline=True)
+        embed.add_field(name="Likes/dislike", value=str(self.data.get('like_count')) + "/" + str(self.data.get('dislike_count')), inline=True)
+        embed.add_field(name='Requested by', value=self.requester.mention)
+        embed.add_field(name='Uploader', value='[{}]({})'.format(self.data.get('uploader'), self.data.get('uploader_url')))
+        embed.add_field(name="Views", value=str(self.data.get('view_count')))
+        embed.add_field(name='URL', value='[Click]({})'.format(self.data.get('url')))
+        embed.colour = discord.Color.green()
 
         return embed
-
 
 class SongQueue(asyncio.Queue):
     def __getitem__(self, item):
@@ -175,7 +133,7 @@ class VoiceState:
         if info.get('_type', None) == 'playlist':
             raise YTDLError("This is a playlist.", True, info.get('webpage_url', None) or info.get('url', None))
 
-        boptions = "-nostdin"
+        boptions = "-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 3"
         aoptions = "-vn"
         source = discord.FFmpegPCMAudio(
             info['url'],
@@ -183,11 +141,11 @@ class VoiceState:
             options=aoptions,
             stderr=subprocess.PIPE
         )
-        entry = YTDLSource(ctx, source, data=info)
+        song = Song(source, ctx, data=info)
 
-        await self.songs.put(Song(entry))
+        await self.songs.put(song)
 
-        return entry
+        return song
 
     async def add_playlist(self, ctx, playlist_url):
         """
@@ -205,18 +163,19 @@ class VoiceState:
         if not info:
             raise YTDLError('Could not extract information from %s' % playlist_url)
 
+        if 'entries' in info:
+            for item in info['entries']:
+                if self.songs.full() or not item:
+                    return
 
-        for item in info['entries']:
-            if self.songs.full():
-                return
-
-            if item:
-                song_url = "https://www.youtube.com/watch?v=%s" % item['id']
-                try:
-                    await self.add_entry(ctx, song_url)
-                except:
-                    continue
-
+                if item:
+                    song_url = "https://www.youtube.com/watch?v=%s" % item['id']
+                    try:
+                        await self.add_entry(ctx, song_url)
+                    except:
+                        continue
+        else:
+            await self.add_entry(ctx, info['url'])
 
     async def audio_player_task(self):
         while True:
@@ -235,20 +194,20 @@ class VoiceState:
                     return
 
             if self._loop:
-                boptions = "-nostdin"
+                boptions = "-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 3"
                 aoptions = "-vn"
                 source = discord.FFmpegPCMAudio(
-                    self.current.source.stream_url,
+                    self.current.data.get('url'),
                     before_options=boptions,
                     options=aoptions,
                     stderr=subprocess.PIPE
                 )
-                entry = YTDLSource(self.current.source.ctx, source, data=self.current.source.data)
-                self.current = Song(entry)
 
-            self.current.source.volume = self._volume
-            self.voice.play(self.current.source, after=self.play_next_song)
-            await self.current.source.channel.send(embed=self.current.create_embed())
+                self.current = Song(source, self.current.ctx, data=self.current.data)
+
+            self.current.volume = self._volume
+            self.voice.play(self.current, after=self.play_next_song)
+            await self.current.ctx.channel.send(embed=self.current.create_embed())
 
             await self.next.wait()
 
@@ -355,7 +314,7 @@ class Music(commands.Cog):
             return await ctx.send('Volume must be between 0 and 100')
 
         ctx.voice_state.volume = volume / 100
-        ctx.voice_state.current.source.volume = volume / 100
+        ctx.voice_state.current.volume = volume / 100
         await ctx.send('Volume of the player set to {}%'.format(volume))
 
     @music.command(name='now', aliases=['current', 'playing'])
@@ -434,7 +393,7 @@ class Music(commands.Cog):
 
         queue = ''
         for i, song in enumerate(ctx.voice_state.songs[start:end], start=start):
-            queue += '`{0}.` [**{1.source.title}**]({1.source.url})\n'.format(i + 1, song)
+            queue += '`{}.` [**{}**]({})\n'.format(i + 1, song.data.get('title'), song.data.get('webpage_url'))
 
         embed = (discord.Embed(description='**{} tracks:**\n\n{}'.format(len(ctx.voice_state.songs), queue))
                  .set_footer(text='Viewing page {}/{}'.format(page, pages)))
@@ -487,8 +446,7 @@ class Music(commands.Cog):
 
         async with ctx.typing():
             try:
-                entry = await ctx.voice_state.add_entry(ctx, search)
-                await ctx.send('Enqueued {}'.format(str(entry)))
+                await ctx.voice_state.add_entry(ctx, search)
             except YTDLError as e:
                 await ctx.send('An error occurred while processing this request: {}'.format(str(e)))
 

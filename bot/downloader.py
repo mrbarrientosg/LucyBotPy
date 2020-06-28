@@ -16,11 +16,14 @@ ytdl_format_options = {
     'nocheckcertificate': True,
     'ignoreerrors': True,
     'logtostderr': False,
+    "extractaudio": True,
+    "audioformat": "best",
+    "audioquality": 0,
+    "extract_flat": True,
     'quiet': True,
     'no_warnings': True,
     'default_search': 'auto',
     'source_address': '0.0.0.0',
-    'usenetrc': True,
     'skip_unavailable_fragments': True
 }
 

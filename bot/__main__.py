@@ -1,5 +1,5 @@
 import discord
-from bot import private, error_handler, wolfram, music
+from bot import private, error_handler, wolfram, music, copy_command
 from discord.ext import commands
 
 
@@ -34,4 +34,5 @@ bot.add_cog(error_handler.CommandErrorHandler(bot))
 bot.add_cog(private.Private(bot))
 bot.add_cog(wolfram.Wolfram(bot))
 bot.add_cog(music.Music(bot))
+bot.add_cog(copy_command.CopyCommand(bot))
 bot.run('NzI1MjQyOTMyMzkwNTI2OTk2.XvNmVg.dB42G_Tqne-bIzPZxUsjmFXzteo')
