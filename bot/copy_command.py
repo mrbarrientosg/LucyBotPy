@@ -8,7 +8,7 @@ class CopyCommand(commands.Cog):
         self.bot = bot
 
     @commands.group()
-    async def copy(self, ctx):
+    async def copi(self, ctx):
         if ctx.invoked_subcommand is None:
             await ctx.send(
                 '{}, amorosa no sabes ocupar el private, ve mi flor de ayuda!! ❤️'.format(ctx.author.mention))
