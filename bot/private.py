@@ -210,8 +210,8 @@ class Private(commands.Cog):
         await self.bot.wait_until_ready()
 
         while True:
-            await asyncio.sleep(10)  # 1800
-            print(len(self.channels))
+            await asyncio.sleep(1800)
+
             if not self.channels:
                 self.voice_task.cancel()
                 self.voice_task = None
