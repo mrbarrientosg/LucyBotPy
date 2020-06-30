@@ -165,7 +165,7 @@ class VoiceState:
 
         if 'entries' in info:
             for item in info['entries']:
-                if self.songs.full() or not item:
+                if self.songs.full():
                     return
 
                 if item:
