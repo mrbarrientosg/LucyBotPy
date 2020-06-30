@@ -132,7 +132,7 @@ class Private(commands.Cog):
         channel = None
 
         try:
-            if type == ChannelTypePrivate.voice:
+            if type is ChannelTypePrivate.voice:
                 channel = await guild.create_voice_channel(name=name, category=category)
             else:
                 channel = (await guild.create_text_channel(name=name, category=category), await guild.create_voice_channel(name=name, category=category))
@@ -148,14 +148,14 @@ class Private(commands.Cog):
                               manage_roles=False,
                               manage_permissions=False,
                               view_channel=True)
-            if isinstance(channel, tuple):
+            if type is ChannelTypePrivate.both:
                 await channel[0].set_permissions(target=role, overwrite=permission)
                 await channel[1].set_permissions(target=role, overwrite=permission)
             else:
                 await channel.set_permissions(target=role, overwrite=permission)
 
         except discord.HTTPException:
-            await self._remove_channels(channel)
+            await self._remove_channels(channel, type)
             await role.delete()
             return await ctx.send('{}, amiga me dio un lag mental, no puedo ayudarte!! ❤️'.format(ctx.author.mention))
 
@@ -164,9 +164,9 @@ class Private(commands.Cog):
             try:
                 await user.add_roles(role)
 
-                if type == ChannelTypePrivate.voice:
+                if type is ChannelTypePrivate.voice:
                     await user.move_to(channel)
-                elif type == ChannelTypePrivate.both:
+                elif type is ChannelTypePrivate.both:
                     await user.move_to(channel[1])
 
             except discord.HTTPException:
@@ -211,17 +211,16 @@ class Private(commands.Cog):
 
             for channel, type, role in self.channels:
                 if type is ChannelTypePrivate.voice and not channel.members:
-                    await self._remove_channels(channel)
+                    await self._remove_channels(channel, type)
                     await role.delete()
-                    self.channels.remove((channel, type, role))
+                    self.channels = [r for _, _, r in self.channels if r.name != role.name]
                 elif type is ChannelTypePrivate.both and not channel[1].members:
-                    await self._remove_channels(channel)
+                    await self._remove_channels(channel, type)
                     await role.delete()
-                    self.channels.remove((channel, type, role))
+                    self.channels = [r for _, _, r in self.channels if r.name != role.name]
 
-
-    async def _remove_channels(self, channel):
-        if isinstance(channel, tuple):
+    async def _remove_channels(self, channel, type):
+        if type is ChannelTypePrivate.both:
             await channel[0].delete()
             await channel[1].delete()
         else:
