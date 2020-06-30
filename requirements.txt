@@ -1,0 +1,9 @@
+discord.py[voice]
+dnspython
+PyNaCl
+async-timeout
+numpy
+wolframalpha
+youtube_dl
+opuslib
+validators
