@@ -39,6 +39,9 @@ async def on_member_join(member):
 
 @bot.event
 async def on_message(message):
+    if message.author == bot.user:
+        return await bot.process_commands(message)
+
     rol_nuevo = get(message.author.roles, name="Nuevo")
 
     if message.channel.name == "bienvenido" and rol_nuevo:

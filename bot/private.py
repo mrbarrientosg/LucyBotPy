@@ -160,7 +160,6 @@ class Private(commands.Cog):
             return await ctx.send('{}, amiga me dio un lag mental, no puedo ayudarte!! ❤️'.format(ctx.author.mention))
 
         exception = False
-        count = 0
         for user in all_members:
             try:
                 await user.add_roles(role)
@@ -171,7 +170,6 @@ class Private(commands.Cog):
                     await user.move_to(channel[1])
 
             except discord.HTTPException:
-                count += 1
                 if not exception:
                     await ctx.send(
                         '{}, tu(s) amiga(s) se quedo dormida, asi que no la puedo mover ❤️'.format(ctx.author.mention))
@@ -183,11 +181,6 @@ class Private(commands.Cog):
             except discord.HTTPException:
                 return await ctx.send(
                     '{}, amiga me dio un lag mental, no puedo ayudarte!! ❤️'.format(ctx.author.mention))
-
-        if len(all_members) == count:
-            await self._remove_channels(channel)
-            await role.delete()
-            return
 
         if not self.channels:
             self.voice_task = self.bot.loop.create_task(self._check_voice_channels())
@@ -210,18 +203,18 @@ class Private(commands.Cog):
         await self.bot.wait_until_ready()
 
         while True:
-            await asyncio.sleep(1800)
+            await asyncio.sleep(900)
 
             if not self.channels:
                 self.voice_task.cancel()
                 self.voice_task = None
 
             for channel, type, role in self.channels:
-                if type == ChannelTypePrivate.voice and not channel.members:
+                if type is ChannelTypePrivate.voice and not channel.members:
                     await self._remove_channels(channel)
                     await role.delete()
                     self.channels.remove((channel, type, role))
-                elif type == ChannelTypePrivate.both and not channel[1].members:
+                elif type is ChannelTypePrivate.both and not channel[1].members:
                     await self._remove_channels(channel)
                     await role.delete()
                     self.channels.remove((channel, type, role))
