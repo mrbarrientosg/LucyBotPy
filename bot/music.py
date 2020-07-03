@@ -1,28 +1,26 @@
 import asyncio
-import functools
 import itertools
-import json
 import math
 import random
-import requests
+import time
+import json
+import urllib.request
 import subprocess
-from copy import copy
 import spotipy
-from spotipy.oauth2 import SpotifyClientCredentials
-from bs4 import BeautifulSoup
 import discord
 import youtube_dl
+import urllib.error
 from async_timeout import timeout
 from discord.ext import commands
 from bot.downloader import Downloader
-
+from spotipy.oauth2 import SpotifyClientCredentials
 # Silence useless bug reports messages
 youtube_dl.utils.bug_reports_message = lambda: ''
 
-client_id = 'cae82b8ceb254fcba37fe4a4673939e8'
-client_secret = '1994b01415144782b9b2816527572550'
+CLIENT_ID = 'cae82b8ceb254fcba37fe4a4673939e8'
+CLIENT_SECRET = '1994b01415144782b9b2816527572550'
 
-auth_manager = SpotifyClientCredentials(client_id, client_secret)
+auth_manager = SpotifyClientCredentials(CLIENT_ID, CLIENT_SECRET)
 sp = spotipy.Spotify(auth_manager=auth_manager)
 
 class VoiceError(Exception):
@@ -133,10 +131,10 @@ class VoiceState:
         try:
             info = await self.downloader.extract_info(self.bot.loop, song_url, download=False)
         except Exception as e:
-            raise YTDLError('Could not extract information from {}\n\n{}'.format(song_url, e))
+            print('Video no disponible: ' + song_url)
 
         if not info:
-            raise YTDLError('Could not extract information from %s' % song_url)
+            print('Video no disponible: ' + song_url)
 
         # TODO: Sort out what happens next when this happens
         if info.get('_type', None) == 'playlist':
@@ -463,64 +461,51 @@ class Music(commands.Cog):
 
     @music.command(name='spotify')
     async def _spotify(self, ctx, query):
-        if query is not None and query[25:-49] == 'playlist':
+        if query.find('/playlist/') != -1:     # Reproduce playlist
             link = query[34:-26]
             resultados = json.loads(json.dumps(sp.playlist_tracks(link)))
-
             for items in range(len(resultados['items'])):
-                name_song = resultados['items'][items]['track']['name']
-                name_artist = resultados['items'][items]['track']['artists'][0]['name']
+                name_song = resultados['items'][items]['track']['name'].replace("'", '').replace('(', '').replace(')','').replace('*', '')
+                name_artist = resultados['items'][items]['track']['artists'][0]['name'].replace("'", '').replace('(', '').replace(')','').replace('*', '')
+                query = name_artist + '-' + name_song
+                query = query.replace(' ', '+')
+                url = f"http://lucybot-dev.herokuapp.com/api/search?q={query}&page=1"
+                url = url.encode('ascii', errors='ignore').decode('utf-8')
+                print(url)
+                try:
+                    data = json.load(urllib.request.urlopen(url))
+                    for results in data['results']:
+                        if results.get('video'):
+                            url_cancion = results.get('video')['url']
+                            await ctx.invoke(self._play, search=url_cancion)
+                            time.sleep(1)
+                            break
 
-                query = name_artist + ' ' + name_song + ' youtube.com'
-                query.replace(' ', '+')
-                URL = f"https://google.com/search?q={query}"
-                USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:65.0) Gecko/20100101 Firefox/65.0"
-                headers = {"user-agent": USER_AGENT}
-                resp = requests.get(URL, headers=headers)
-                if resp.status_code == 200:
-                    soup = BeautifulSoup(resp.content, "html.parser")
-                    results = []
-                    for g in soup.find_all('div', class_='r'):
-                        clase_cite = g.find('cite')
-                        anchors = g.find_all('a')
-                        if anchors:
-                            link = anchors[0]['href']
-                            item = {
-                                'link': link
-                            }
-                            clase_cite = clase_cite.contents
-                            str(clase_cite).encode('utf8')
-                            if clase_cite[0] == 'www.youtube.com':
-                                results.append(item)
-                if len(results) > 0:
-                    await ctx.invoke(self._play, search=results[0]['link'])
-                else:
-                    await ctx.send('No se pudo reproducir la canción ' + name_artist + '-' + name_song)
-        else:
-            if query is not None and query[25:-49] == 'track':
-                link = query[31:-26]
-                resultados = json.loads(json.dumps(sp.track(link)))
-                name_song = resultados['name']
-                name_artist = resultados['album']['artists'][0]['name']
+                except urllib.error.HTTPError as e:
+                    print(e)
+                    print(url)
 
-                query = name_artist + ' ' + name_song + 'youtube'
-                query.replace(' ', '+')
-                URL = f"https://google.com/search?q={query}"
-                USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:65.0) Gecko/20100101 Firefox/65.0"
-                headers = {"user-agent": USER_AGENT}
-                resp = requests.get(URL, headers=headers)
-                if resp.status_code == 200:
-                    soup = BeautifulSoup(resp.content, "html.parser")
-                    results = []
-                    for g in soup.find_all('div', class_='r'):
-                        anchors = g.find_all('a')
-                        if anchors:
-                            link = anchors[0]['href']
-                            item = {
-                                'link': link
-                            }
-                            results.append(item)
-                await ctx.invoke(self._play, search=results[0]['link'])
+        if query.find('/track/') != -1:
+            link = query[31:-26]
+            resultados = json.loads(json.dumps(sp.track(link)))
+            name_song = resultados['name'].replace("'", '').replace('(', '').replace(')','').replace('*', '')
+            name_artist = resultados['album']['artists'][0]['name'].replace("'", '').replace('(', '').replace(')','').replace('*', '')
+            query = name_artist + '-' + name_song
+            query = query.replace(' ', '+')
+            url = f"http://lucybot-dev.herokuapp.com/api/search?q={query}&page=1"
+            url = url.encode('ascii', errors='ignore').decode('utf-8')
+            try:
+                data = json.load(urllib.request.urlopen(url))
+                for results in data['results']:
+                    if results.get('video'):
+                        url_cancion = results.get('video')['url']
+                        await ctx.invoke(self._play, search=url_cancion)
+                        time.sleep(1)
+                        break
+            except urllib.error.HTTPError as e:
+                print(e)
+                print(url)
+
 
     @music.command(name='playlist')
     async def _play_list(self, ctx: commands.Context, *, search: str):
