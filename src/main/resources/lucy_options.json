@@ -1,0 +1,37 @@
+{
+  "commands": [
+    {
+      "name": "private",
+      "description": "Create a private channel with your friends",
+      "help": "",
+      "alias": [],
+      "is_group": true,
+      "sub_commands": [
+        {
+          "name": "create",
+          "description": "Create a private channel",
+          "sub_commands": [],
+          "help": "",
+          "alias": [],
+          "is_group": false
+        },
+        {
+          "name": "invite",
+          "description": "Invite someone to a private channel",
+          "sub_commands": [],
+          "help": "",
+          "alias": [],
+          "is_group": false
+        },
+        {
+          "name": "remove",
+          "description": "Remove your private rol",
+          "sub_commands": [],
+          "help": "",
+          "alias": [],
+          "is_group": false
+        }
+      ]
+    }
+  ]
+}
